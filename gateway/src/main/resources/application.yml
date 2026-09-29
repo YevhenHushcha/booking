@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    # There is no service registry in this project: compose DNS resolves the service names.
+    # Turning discovery off also drops its health indicators, which would otherwise report
+    # UNKNOWN on every /actuator/health call.
+    discovery:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
