@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: gateway
+  reactor:
+    # WebFlux runs a request on several threads, so the trace id in the logging MDC is lost unless
+    # Reactor copies it across; without this, gateway log lines have an empty [traceId-spanId] field.
+    context-propagation: auto
   cloud:
     # There is no service registry in this project: compose DNS resolves the service names.
     # Turning discovery off also drops its health indicators, which would otherwise report
@@ -159,11 +163,34 @@ jwt:
   secret: ${JWT_SECRET}
 
 management:
+  tracing:
+    sampling:
+      # Every request is traced so any demo call can be found in Jaeger. Production samples a
+      # fraction here, or keeps 100% and lets an OpenTelemetry Collector tail-sample.
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # Buckets instead of client-side percentiles: p99 is computed in Prometheus and can be
+      # aggregated across instances, which precomputed percentiles cannot.
+      percentiles-histogram:
+        http.server.requests: true
+        # Per-route latency as the gateway sees it, including time spent in retries.
+        spring.cloud.gateway.requests: true
+  observations:
+    enable:
+      # Security adds four spans ("filterchain before", "authorize exchange", ...) to every
+      # request; the http span already shows the time, so they only bury the downstream call.
+      spring.security: false
   endpoints:
     web:
       exposure:
         # circuitbreakers shows each breaker's state; like everything except health, it requires a token.
-        include: health,info,circuitbreakers
+        include: health,info,prometheus,circuitbreakers
   endpoint:
     health:
       # The gateway is the public entry point: anonymous callers get only the status.
@@ -195,3 +222,8 @@ services:
   user-service: http://user-service:8081
   workspace-service: http://workspace-service:8082
   booking-service: http://booking-service:8083
+
+management:
+  otlp:
+    tracing:
+      endpoint: http://jaeger:4318/v1/traces

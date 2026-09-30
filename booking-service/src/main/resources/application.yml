@@ -19,15 +19,36 @@ spring:
       enabled: true
 
 management:
+  tracing:
+    sampling:
+      # Every request is traced so any demo call can be found in Jaeger. Production samples a
+      # fraction here, or keeps 100% and lets an OpenTelemetry Collector tail-sample.
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # Buckets instead of client-side percentiles: p99 is computed in Prometheus and can be
+      # aggregated across instances, which precomputed percentiles cannot.
+      percentiles-histogram:
+        http.server.requests: true
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: always
       probes:
         enabled: true
+
+jdbc:
+  # One span per SQL statement; the library's default also traces connection and result-set
+  # handling, which triples the span count without saying anything new.
+  includes: query
 
 ---
 # Active inside docker-compose, where Postgres answers to its service name.
@@ -37,3 +58,8 @@ spring:
       on-profile: docker
   datasource:
     url: jdbc:postgresql://postgres:5432/bookings_db
+
+management:
+  otlp:
+    tracing:
+      endpoint: http://jaeger:4318/v1/traces
