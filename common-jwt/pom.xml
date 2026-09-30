@@ -17,4 +17,12 @@
         Deliberately free of any Spring web dependency: the gateway is reactive and the services
         are servlet-based, so a shared module must not drag either stack into the other.
     </description>
+
+    <dependencies>
+        <!-- Plain JOSE library, no Spring: the same one Spring Security uses to decode tokens in the gateway. -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+        </dependency>
+    </dependencies>
 </project>

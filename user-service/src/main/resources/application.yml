@@ -13,6 +13,18 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  flyway:
+    # db/demo seeds the demo accounts; a production profile would list db/migration only.
+    locations: classpath:db/migration,classpath:db/demo
+  mvc:
+    # Errors as RFC 9457 application/problem+json instead of Boot's whitelabel JSON.
+    problemdetails:
+      enabled: true
+
+jwt:
+  # No default: must be the same secret the gateway verifies with.
+  secret: ${JWT_SECRET}
+  ttl: 15m
 
 management:
   endpoints:

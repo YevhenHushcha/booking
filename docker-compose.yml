@@ -35,8 +35,23 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Rate limiter buckets. No published port and no password: it is reachable only from the
+  # compose network. Production would require AUTH and TLS.
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   gateway:
     <<: *service-base
+    # The gateway has no database; it needs Redis only.
+    depends_on:
+      redis:
+        condition: service_healthy
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -45,6 +60,7 @@ services:
     environment:
       <<: *service-env
       SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     ports:
       - "8080:8080"
     healthcheck: *app-healthcheck
@@ -61,6 +77,7 @@ services:
     environment:
       <<: *service-env
       SERVER_PORT: 8081
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     ports:
       - "8081:8081"
     healthcheck: *app-healthcheck

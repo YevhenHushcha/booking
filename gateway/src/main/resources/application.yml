@@ -10,18 +10,188 @@ spring:
     # UNKNOWN on every /actuator/health call.
     discovery:
       enabled: false
+    gateway:
+      # Gateway 4.3 moved route properties from spring.cloud.gateway.* under server.webflux.*;
+      # the old prefix still binds but logs a deprecation warning.
+      server:
+        webflux:
+          httpclient:
+            # Without these a hung service holds the request until the client gives up,
+            # and the circuit breaker never sees a failure.
+            connect-timeout: 1000
+            response-timeout: 5s
+          # Filters run in the order listed:
+          #   RequestRateLimiter - reject before doing any work, and before a failed call can be retried
+          #   StripPrefix=1      - /api/users/me -> /users/me
+          #   CircuitBreaker     - wraps Retry, so a request and its retries count as one call
+          #   Retry              - idempotent GETs only; see the gateway-get-retry comment below
+          routes:
+            # Login gets its own route for a stricter, per-IP limit against password guessing.
+            - id: auth
+              uri: ${services.user-service}
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenish-rate: ${rate-limit.login.replenish-rate}
+                    redis-rate-limiter.burst-capacity: ${rate-limit.login.burst-capacity}
+                    redis-rate-limiter.requested-tokens: ${rate-limit.login.requested-tokens}
+                - StripPrefix=1
+                - name: CircuitBreaker
+                  args:
+                    name: user-service
+                    statusCodes: ${circuit-breaker.failure-status-codes}
+            - id: user-service
+              uri: ${services.user-service}
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+                - StripPrefix=1
+                - name: CircuitBreaker
+                  args:
+                    name: user-service
+                    statusCodes: ${circuit-breaker.failure-status-codes}
+                - &gateway-get-retry
+                  name: Retry
+                  args:
+                    retries: 2
+                    # POST is not idempotent: a retry after a lost response would create a second booking.
+                    methods: GET
+                    # 502/503 mean the request did not reach a working instance. 500 is a bug and
+                    # would fail again; 504 means the service is already slow and a retry adds load.
+                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                    # The default series (5XX) would retry 500 as well.
+                    series:
+                    # Connection refused or reset. The default also includes timeouts, dropped for the same reason as 504.
+                    exceptions: java.io.IOException
+                    backoff:
+                      first-backoff: 100ms
+                      max-backoff: 200ms
+                      factor: 2
+                      based-on-previous-value: false
+            - id: workspace-service
+              uri: ${services.workspace-service}
+              predicates:
+                - Path=/api/workspaces/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+                - StripPrefix=1
+                - name: CircuitBreaker
+                  args:
+                    name: workspace-service
+                    statusCodes: ${circuit-breaker.failure-status-codes}
+                - *gateway-get-retry
+            - id: booking-service
+              uri: ${services.booking-service}
+              predicates:
+                - Path=/api/bookings/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+                - StripPrefix=1
+                - name: CircuitBreaker
+                  args:
+                    name: booking-service
+                    statusCodes: ${circuit-breaker.failure-status-codes}
+                - *gateway-get-retry
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+services:
+  user-service: http://localhost:8081
+  workspace-service: http://localhost:8082
+  booking-service: http://localhost:8083
+
+rate-limit:
+  # Per user (or per IP when anonymous): 10 requests/s sustained, bursts up to 20.
+  api:
+    replenish-rate: 10
+    burst-capacity: 20
+  # Per IP: each attempt costs 12 tokens and the bucket refills 1 token/s,
+  # so 5 attempts in a burst, then one every 12 s (5 per minute).
+  login:
+    replenish-rate: 1
+    burst-capacity: 60
+    requested-tokens: 12
+
+circuit-breaker:
+  # 4xx responses are the caller's fault and must not open the circuit.
+  failure-status-codes: 500,502,503,504
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      # Applies to every breaker the gateway creates; the breakers are named after the services.
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        slow-call-duration-threshold: 3s
+        slow-call-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+  timelimiter:
+    configs:
+      default:
+        # Resilience4j's own default is 1 s, which would cut off calls the HTTP client still allows.
+        # Upper bound for a call and its retries; above response-timeout so that one fires first.
+        timeout-duration: 6s
+
+jwt:
+  # No default: must be the same secret user-service signs with.
+  secret: ${JWT_SECRET}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # circuitbreakers shows each breaker's state; like everything except health, it requires a token.
+        include: health,info,circuitbreakers
   endpoint:
     health:
-      show-details: always
+      # The gateway is the public entry point: anonymous callers get only the status.
+      show-details: when-authorized
       probes:
         enabled: true
+  health:
+    # The rate limiter lets requests through when Redis is down, so a Redis outage must not
+    # mark the gateway DOWN and pull it out of rotation. The same reasoning keeps the
+    # circuit breakers out of health: one broken service must not take the gateway down with it.
+    redis:
+      enabled: false
 
 logging:
   level:
     org.springframework.cloud.gateway: INFO
+
+---
+# Active inside docker-compose, where each service answers to its compose name.
+spring:
+  config:
+    activate:
+      on-profile: docker
+  data:
+    redis:
+      host: redis
+
+services:
+  user-service: http://user-service:8081
+  workspace-service: http://workspace-service:8082
+  booking-service: http://booking-service:8083

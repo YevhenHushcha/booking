@@ -13,6 +13,13 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  flyway:
+    # db/demo seeds sample rows; a production profile would list db/migration only.
+    locations: classpath:db/migration,classpath:db/demo
+  mvc:
+    # Errors as RFC 9457 application/problem+json instead of Boot's whitelabel JSON.
+    problemdetails:
+      enabled: true
 
 management:
   endpoints:

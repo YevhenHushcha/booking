@@ -34,6 +34,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <spring-cloud.version>2025.0.3</spring-cloud.version>
+        <!-- Not managed by Boot; kept equal to what spring-security-oauth2-jose 6.5.x brings to the gateway. -->
+        <nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
+        <wiremock.version>3.13.1</wiremock.version>
     </properties>
 
     <dependencyManagement>
@@ -44,6 +47,11 @@
                 <version>${spring-cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.coworking</groupId>
