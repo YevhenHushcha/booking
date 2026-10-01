@@ -1,0 +1,16 @@
+# Layered on top of the root docker-compose.yml by the e2e tests.
+# The test stack has to be able to run next to a developer's stack, so it publishes no host
+# ports at all; Testcontainers reaches the services through its own ambassador container.
+services:
+  postgres:
+    ports: !reset []
+  gateway:
+    ports: !reset []
+  user-service:
+    ports: !reset []
+  workspace-service:
+    ports: !reset []
+  booking-service:
+    ports: !reset []
+  jaeger:
+    ports: !reset []

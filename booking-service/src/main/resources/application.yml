@@ -13,10 +13,19 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  http:
+    client:
+      # The workspace check runs inside a booking request; without a read timeout a hung
+      # workspace-service would hold that request until the gateway gives up on it.
+      connect-timeout: 1s
+      read-timeout: 2s
   mvc:
     # Errors as RFC 9457 application/problem+json instead of Boot's whitelabel JSON.
     problemdetails:
       enabled: true
+
+services:
+  workspace-service: http://localhost:8082
 
 management:
   tracing:
@@ -58,6 +67,9 @@ spring:
       on-profile: docker
   datasource:
     url: jdbc:postgresql://postgres:5432/bookings_db
+
+services:
+  workspace-service: http://workspace-service:8082
 
 management:
   otlp:

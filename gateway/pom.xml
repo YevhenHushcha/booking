@@ -15,6 +15,22 @@
     <description>Spring Cloud Gateway: routing, JWT authentication, resilience</description>
 
     <dependencies>
+        <!-- Log4j 2 instead of Boot's default Logback. Declaring spring-boot-starter directly makes it
+             the nearest occurrence, so its exclusion wins over every other starter that pulls it in. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>

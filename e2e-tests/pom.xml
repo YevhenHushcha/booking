@@ -15,7 +15,7 @@
     <description>
         End-to-end tests against the full docker-compose stack. They need the service images to be
         built first, so they run under the `e2e` profile only and stay out of the ordinary build.
-        Per-service tests (real Postgres via Testcontainers) and gateway tests (MockWebServer)
+        Per-service tests (real Postgres via Testcontainers) and gateway tests (WireMock, real Redis)
         live in their own modules and do run on every build.
     </description>
 
@@ -23,6 +23,24 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>
     </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
     <profiles>
         <profile>
