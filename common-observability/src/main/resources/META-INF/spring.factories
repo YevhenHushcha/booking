@@ -1,0 +1,2 @@
+org.springframework.context.ApplicationListener=\
+io.github.coworking.observability.Log4jLoggingListener
