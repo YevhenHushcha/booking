@@ -2,12 +2,13 @@ jwt:
   secret: gateway-test-secret-long-enough-for-hs256
 
 spring:
+  # Spans are not exported in tests: there is no collector, and TracePropagationTest checks headers.
+  zipkin:
+    enabled: false
   cloud:
     gateway:
-      server:
-        webflux:
-          httpclient:
-            response-timeout: 500ms
+      httpclient:
+        response-timeout: 500ms
 
 # High enough that routing, circuit breaker and retry tests never hit the limiter;
 # RateLimitTest overrides these with small values.

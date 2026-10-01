@@ -29,6 +29,28 @@ public class UserController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User no longer exists"));
     }
 
-    public record UserResponse(long id, String email, List<String> roles) {
+    public static class UserResponse {
+
+        private final long id;
+        private final String email;
+        private final List<String> roles;
+
+        UserResponse(long id, String email, List<String> roles) {
+            this.id = id;
+            this.email = email;
+            this.roles = roles;
+        }
+
+        public long getId() {
+            return id;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public List<String> getRoles() {
+            return roles;
+        }
     }
 }

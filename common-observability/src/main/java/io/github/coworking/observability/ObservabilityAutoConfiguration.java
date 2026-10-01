@@ -1,50 +1,35 @@
 package io.github.coworking.observability;
 
-import io.micrometer.observation.ObservationPredicate;
+import brave.handler.MutableSpan;
+import brave.handler.SpanHandler;
+import brave.propagation.TraceContext;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 
 /**
- * Keeps traces to what a user did. Without these rules most traces in Jaeger would be Prometheus
- * scraping {@code /actuator/prometheus} every few seconds and healthchecks querying the database.
+ * Keeps traces to what a user did. Sleuth already skips {@code /actuator} requests; what is left
+ * is outgoing calls nobody's request caused.
  */
 @AutoConfiguration
 public class ObservabilityAutoConfiguration {
 
-    private static final String ACTUATOR_PREFIX = "/actuator";
-
     /**
-     * A JDBC span with no parent was not caused by a request: the database health indicator,
+     * A client span with no parent was not caused by a request: the database health indicator,
      * Flyway at startup, the connection pool. As a trace of its own it is noise.
+     * <p>
+     * Ordered first, because Brave stops at the first handler that returns {@code false}, and the
+     * Zipkin reporter is one of the handlers.
      */
     @Bean
-    ObservationPredicate skipJdbcOutsideRequests() {
-        return (name, context) -> !name.startsWith("jdbc") || context.getParentObservation() != null;
-    }
-
-    // Both web stacks name their context class ServerRequestObservationContext, hence the qualified names.
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnWebApplication(type = Type.SERVLET)
-    static class Servlet {
-
-        @Bean
-        ObservationPredicate skipActuatorRequests() {
-            return (name, context) -> !(context instanceof org.springframework.http.server.observation.ServerRequestObservationContext request
-                    && request.getCarrier().getRequestURI().startsWith(ACTUATOR_PREFIX));
-        }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnWebApplication(type = Type.REACTIVE)
-    static class Reactive {
-
-        @Bean
-        ObservationPredicate skipActuatorRequests() {
-            return (name, context) -> !(context instanceof org.springframework.http.server.reactive.observation.ServerRequestObservationContext request
-                    && request.getCarrier().getPath().value().startsWith(ACTUATOR_PREFIX));
-        }
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    SpanHandler dropClientSpansOutsideRequests() {
+        return new SpanHandler() {
+            @Override
+            public boolean end(TraceContext context, MutableSpan span, Cause cause) {
+                return !(span.kind() == brave.Span.Kind.CLIENT && context.parentIdAsLong() == 0L);
+            }
+        };
     }
 }

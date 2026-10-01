@@ -13,9 +13,9 @@
     <artifactId>common-observability</artifactId>
     <name>common-observability</name>
     <description>
-        Tracing rules shared by all four apps, applied through Spring Boot auto-configuration.
-        Serves the reactive gateway and the servlet services alike: each web stack's part is
-        conditional, and the servlet API is only needed where it is already present.
+        Tracing and logging rules shared by all four apps. Tracing is Spring Cloud Sleuth on Brave;
+        logging is Log4j 1.x, which Spring Boot 2 no longer supports, so this module switches Boot's
+        own logging system off before it starts.
     </description>
 
     <dependencies>
@@ -24,17 +24,13 @@
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-observation</artifactId>
+            <groupId>io.zipkin.brave</groupId>
+            <artifactId>brave</artifactId>
         </dependency>
+        <!-- Tomcat, Hikari's driver checks and the JDK itself log through java.util.logging. -->
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.servlet</groupId>
-            <artifactId>jakarta.servlet-api</artifactId>
-            <scope>provided</scope>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
         </dependency>
     </dependencies>
 </project>

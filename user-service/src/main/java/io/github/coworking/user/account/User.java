@@ -1,14 +1,15 @@
 package io.github.coworking.user.account;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
@@ -43,6 +44,6 @@ public class User {
     }
 
     public List<String> getRoles() {
-        return Arrays.stream(roles.split(",")).map(String::trim).filter(role -> !role.isEmpty()).toList();
+        return Arrays.stream(roles.split(",")).map(String::trim).filter(role -> !role.isEmpty()).collect(Collectors.toList());
     }
 }

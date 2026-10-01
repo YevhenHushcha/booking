@@ -1,21 +1,40 @@
 package io.github.coworking.booking.workspace;
 
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.service.annotation.GetExchange;
-import org.springframework.web.service.annotation.HttpExchange;
 
-/**
- * workspace-service as seen from booking-service. Spring generates the implementation from the
- * annotations, the way Feign does on the legacy branch.
- */
-@HttpExchange("/workspaces")
+/** workspace-service as seen from booking-service; OpenFeign generates the implementation. */
+@FeignClient(name = "workspace-service", url = "${services.workspace-service}")
 public interface WorkspaceClient {
 
-    /** Throws {@code HttpClientErrorException.NotFound} when there is no such workspace. */
-    @GetExchange("/{id}")
-    WorkspaceSummary get(@PathVariable long id);
+    /**
+     * Throws {@code FeignException.NotFound} when there is no such workspace. The path variable is
+     * named explicitly: Feign reads the annotation, not the parameter name.
+     */
+    @GetMapping("/workspaces/{id}")
+    WorkspaceSummary get(@PathVariable("id") long id);
 
     /** Only the fields booking-service needs; unknown JSON properties are ignored. */
-    record WorkspaceSummary(long id, String name) {
+    class WorkspaceSummary {
+
+        private long id;
+        private String name;
+
+        public long getId() {
+            return id;
+        }
+
+        public void setId(long id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
     }
 }

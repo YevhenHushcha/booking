@@ -29,7 +29,7 @@ public final class JwtContract {
      * request when the secret is too short to be safe.
      */
     public static SecretKey signingKey(String secret) {
-        if (secret == null || secret.isBlank()) {
+        if (secret == null || secret.trim().isEmpty()) {
             throw new IllegalArgumentException("JWT secret is not set");
         }
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);

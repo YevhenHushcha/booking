@@ -10,7 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
+import java.util.Collections;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.absent;
 import static com.github.tomakehurst.wiremock.client.WireMock.anyRequestedFor;
@@ -66,7 +66,7 @@ class RoutingAndAuthenticationTest extends GatewayIntegrationTest {
     void tokenSignedWithAnotherSecretIsRejected() {
         TokenIssuer forger = new TokenIssuer(
                 "a-different-secret-that-is-long-enough", Duration.ofMinutes(15), Clock.systemUTC());
-        String forged = forger.issue(1, "admin@coworking.test", List.of("ADMIN")).value();
+        String forged = forger.issue(1, "admin@coworking.test", Collections.singletonList("ADMIN")).getValue();
 
         client.get().uri("/api/bookings")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + forged)
@@ -80,7 +80,7 @@ class RoutingAndAuthenticationTest extends GatewayIntegrationTest {
     void expiredTokenIsRejected() {
         Clock anHourAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
         String expired = new TokenIssuer(JWT_SECRET, Duration.ofMinutes(15), anHourAgo)
-                .issue(1, "user1@coworking.test", List.of("USER")).value();
+                .issue(1, "user1@coworking.test", Collections.singletonList("USER")).getValue();
 
         client.get().uri("/api/bookings")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)

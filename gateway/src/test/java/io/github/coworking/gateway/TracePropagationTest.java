@@ -1,10 +1,12 @@
 package io.github.coworking.gateway;
 
+import brave.sampler.Sampler;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.context.TestPropertySource;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matching;
@@ -12,17 +14,27 @@ import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 
 /**
- * If the gateway did not forward the W3C trace context, each service would start a new trace and
+ * If the gateway did not forward the trace context, each service would start a new trace and
  * Jaeger would show four disconnected fragments per request instead of one tree.
  * <p>
- * Boot turns tracing off in tests by default; {@link AutoConfigureObservability} turns it back on.
- * Spans are not exported: there is no collector here, and the header is what is being tested.
+ * Sleuth propagates in Zipkin's B3 format, as separate {@code X-B3-*} headers, and creates 64-bit
+ * trace ids unless {@code spring.sleuth.trace-id128} is set. Spans are not exported here (the test
+ * profile turns Zipkin off); the headers are what is being tested.
  */
-@AutoConfigureObservability
-@TestPropertySource(properties = "management.otlp.tracing.export.enabled=false")
 class TracePropagationTest extends GatewayIntegrationTest {
 
-    private static final String TRACEPARENT = "traceparent";
+    /**
+     * {@code spring.sleuth.sampler.probability} is applied by Sleuth's Zipkin auto-configuration;
+     * with Zipkin off, Sleuth falls back to {@code NEVER_SAMPLE} and forwards {@code X-B3-Sampled: 0}.
+     */
+    @TestConfiguration
+    static class SampleEverything {
+
+        @Bean
+        Sampler sampler() {
+            return Sampler.ALWAYS_SAMPLE;
+        }
+    }
 
     @Test
     void upstreamReceivesTheTraceContextSoItsSpansJoinTheGatewayTrace() {
@@ -33,9 +45,10 @@ class TracePropagationTest extends GatewayIntegrationTest {
                 .exchange()
                 .expectStatus().isOk();
 
-        // version-traceId-parentSpanId-flags; flags 01 = sampled
         UPSTREAM.verify(getRequestedFor(urlEqualTo("/workspaces"))
-                .withHeader(TRACEPARENT, matching("00-[0-9a-f]{32}-[0-9a-f]{16}-01")));
+                .withHeader("X-B3-TraceId", matching("[0-9a-f]{16}"))
+                .withHeader("X-B3-SpanId", matching("[0-9a-f]{16}"))
+                .withHeader("X-B3-Sampled", equalTo("1")));
     }
 
     @Test
@@ -45,11 +58,11 @@ class TracePropagationTest extends GatewayIntegrationTest {
 
         client.get().uri("/api/workspaces")
                 .header(HttpHeaders.AUTHORIZATION, bearer(1))
-                .header(TRACEPARENT, "00-" + callerTraceId + "-00f067aa0ba902b7-01")
+                .header("b3", callerTraceId + "-00f067aa0ba902b7-1")
                 .exchange()
                 .expectStatus().isOk();
 
         UPSTREAM.verify(getRequestedFor(urlEqualTo("/workspaces"))
-                .withHeader(TRACEPARENT, matching("00-" + callerTraceId + "-[0-9a-f]{16}-01")));
+                .withHeader("X-B3-TraceId", equalTo(callerTraceId)));
     }
 }

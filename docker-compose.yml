@@ -119,12 +119,12 @@ services:
 
   # --- Observability -------------------------------------------------------------------------
 
-  # Receives OTLP traces from all four apps; in-memory storage, so traces are lost on restart.
+  # Receives traces from all four apps in Zipkin format; in-memory storage, so traces are lost on restart.
   jaeger:
     image: jaegertracing/jaeger:2.10.0
     ports:
       - "16686:16686"  # UI
-      - "4318:4318"    # OTLP over HTTP, published so apps started from the IDE can export too
+      - "9411:9411"    # Zipkin v2 API, published so apps started from the IDE can export too
     restart: unless-stopped
 
   prometheus:

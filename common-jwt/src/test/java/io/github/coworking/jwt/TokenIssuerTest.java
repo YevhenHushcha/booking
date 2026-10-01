@@ -9,7 +9,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,9 +24,9 @@ class TokenIssuerTest {
 
     @Test
     void issuedTokenCarriesTheContractClaimsAndVerifiesWithTheSameSecret() throws Exception {
-        TokenIssuer.IssuedToken token = issuer.issue(42L, "alice@coworking.test", List.of("USER"));
+        TokenIssuer.IssuedToken token = issuer.issue(42L, "alice@coworking.test", Collections.singletonList("USER"));
 
-        SignedJWT jwt = SignedJWT.parse(token.value());
+        SignedJWT jwt = SignedJWT.parse(token.getValue());
         assertThat(jwt.verify(new MACVerifier(JwtContract.signingKey(SECRET)))).isTrue();
 
         JWTClaimsSet claims = jwt.getJWTClaimsSet();
@@ -35,16 +35,16 @@ class TokenIssuerTest {
         assertThat(claims.getStringClaim(JwtContract.CLAIM_EMAIL)).isEqualTo("alice@coworking.test");
         assertThat(claims.getStringListClaim(JwtContract.CLAIM_ROLES)).containsExactly("USER");
         assertThat(claims.getExpirationTime().toInstant()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
-        assertThat(token.issuedAt()).isEqualTo(NOW);
-        assertThat(token.expiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
+        assertThat(token.getIssuedAt()).isEqualTo(NOW);
+        assertThat(token.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
     }
 
     @Test
     void tokenSignedWithAnotherSecretDoesNotVerify() throws Exception {
-        TokenIssuer.IssuedToken token = issuer.issue(42L, "alice@coworking.test", List.of("USER"));
+        TokenIssuer.IssuedToken token = issuer.issue(42L, "alice@coworking.test", Collections.singletonList("USER"));
 
         MACVerifier otherKey = new MACVerifier(JwtContract.signingKey("another-secret-that-is-also-long-enough"));
-        assertThat(SignedJWT.parse(token.value()).verify(otherKey)).isFalse();
+        assertThat(SignedJWT.parse(token.getValue()).verify(otherKey)).isFalse();
     }
 
     @Test
