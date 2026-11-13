@@ -53,6 +53,28 @@ public class TokenIssuer {
         return new IssuedToken(jwt.serialize(), now, expiresAt);
     }
 
-    public record IssuedToken(String value, Instant issuedAt, Instant expiresAt) {
+    public static final class IssuedToken {
+
+        private final String value;
+        private final Instant issuedAt;
+        private final Instant expiresAt;
+
+        IssuedToken(String value, Instant issuedAt, Instant expiresAt) {
+            this.value = value;
+            this.issuedAt = issuedAt;
+            this.expiresAt = expiresAt;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public Instant getIssuedAt() {
+            return issuedAt;
+        }
+
+        public Instant getExpiresAt() {
+            return expiresAt;
+        }
     }
 }

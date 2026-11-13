@@ -13,29 +13,32 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-  http:
-    client:
-      # The workspace check runs inside a booking request; without a read timeout a hung
-      # workspace-service would hold that request until the gateway gives up on it.
-      connect-timeout: 1s
-      read-timeout: 2s
-  mvc:
-    # Errors as RFC 9457 application/problem+json instead of Boot's whitelabel JSON.
-    problemdetails:
-      enabled: true
+  sleuth:
+    sampler:
+      # Every request is traced so any demo call can be found in Jaeger. Production samples a
+      # fraction here, or keeps 100% and lets a collector tail-sample.
+      probability: 1.0
+    jdbc:
+      # One span per SQL statement; the default also traces connection and result-set
+      # handling, which triples the span count without saying anything new.
+      includes: query
+  zipkin:
+    # Jaeger accepts the Zipkin v2 format on this port.
+    base-url: http://localhost:9411/
 
 services:
   workspace-service: http://localhost:8082
 
+feign:
+  client:
+    config:
+      default:
+        # The workspace check runs inside a booking request; without a read timeout a hung
+        # workspace-service would hold that request until the gateway gives up on it.
+        connect-timeout: 1000
+        read-timeout: 2000
+
 management:
-  tracing:
-    sampling:
-      # Every request is traced so any demo call can be found in Jaeger. Production samples a
-      # fraction here, or keeps 100% and lets an OpenTelemetry Collector tail-sample.
-      probability: 1.0
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
   metrics:
     tags:
       application: ${spring.application.name}
@@ -54,11 +57,6 @@ management:
       probes:
         enabled: true
 
-jdbc:
-  # One span per SQL statement; the library's default also traces connection and result-set
-  # handling, which triples the span count without saying anything new.
-  includes: query
-
 ---
 # Active inside docker-compose, where Postgres answers to its service name.
 spring:
@@ -67,11 +65,8 @@ spring:
       on-profile: docker
   datasource:
     url: jdbc:postgresql://postgres:5432/bookings_db
+  zipkin:
+    base-url: http://jaeger:9411/
 
 services:
   workspace-service: http://workspace-service:8082
-
-management:
-  otlp:
-    tracing:
-      endpoint: http://jaeger:4318/v1/traces

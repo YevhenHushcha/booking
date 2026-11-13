@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -33,14 +32,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Runs against a real PostgreSQL with the production migrations; WireMock plays workspace-service. */
-@SpringBootTest(properties = "DB_PASSWORD=unused") // the datasource comes from the container
+@SpringBootTest(properties = {
+        "DB_PASSWORD=unused", // the datasource comes from the container
+        "spring.zipkin.enabled=false",
+})
 @AutoConfigureMockMvc
 @Testcontainers
 class BookingServiceIntegrationTest {
 
     @Container
-    @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @DynamicPropertySource
+    static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+    }
 
     static final WireMockServer WORKSPACES = new WireMockServer(wireMockConfig().dynamicPort());
 

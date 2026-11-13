@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.coworking.jwt.TokenIssuer;
 import io.github.coworking.user.account.User;
 import io.github.coworking.user.account.UserRepository;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,27 +36,61 @@ public class AuthController {
 
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-        Optional<User> user = users.findByEmail(request.email());
+        Optional<User> user = users.findByEmail(request.getEmail());
         String hash = user.map(User::getPasswordHash).orElse(dummyHash);
-        boolean passwordMatches = passwordEncoder.matches(request.password(), hash);
-        if (user.isEmpty() || !passwordMatches) {
+        boolean passwordMatches = passwordEncoder.matches(request.getPassword(), hash);
+        if (!user.isPresent() || !passwordMatches) {
             // One message for both cases: the response must not reveal which emails are registered.
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
         User found = user.get();
         TokenIssuer.IssuedToken token = tokenIssuer.issue(found.getId(), found.getEmail(), found.getRoles());
-        long expiresIn = Duration.between(token.issuedAt(), token.expiresAt()).toSeconds();
-        return new TokenResponse(token.value(), "Bearer", expiresIn);
+        long expiresIn = Duration.between(token.getIssuedAt(), token.getExpiresAt()).getSeconds();
+        return new TokenResponse(token.getValue(), "Bearer", expiresIn);
     }
 
-    public record LoginRequest(@NotBlank String email, @NotBlank String password) {
+    public static class LoginRequest {
+
+        @NotBlank
+        private String email;
+
+        @NotBlank
+        private String password;
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
     }
 
     /** Field names follow the OAuth 2.0 token response (RFC 6749, section 5.1). */
-    public record TokenResponse(
-            @JsonProperty("access_token") String accessToken,
-            @JsonProperty("token_type") String tokenType,
-            @JsonProperty("expires_in") long expiresIn) {
+    public static class TokenResponse {
+
+        @JsonProperty("access_token")
+        private final String accessToken;
+
+        @JsonProperty("token_type")
+        private final String tokenType;
+
+        @JsonProperty("expires_in")
+        private final long expiresIn;
+
+        TokenResponse(String accessToken, String tokenType, long expiresIn) {
+            this.accessToken = accessToken;
+            this.tokenType = tokenType;
+            this.expiresIn = expiresIn;
+        }
     }
 }

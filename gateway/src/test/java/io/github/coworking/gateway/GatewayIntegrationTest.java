@@ -16,7 +16,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.util.List;
+import java.util.Collections;
 
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 
@@ -58,8 +58,8 @@ public abstract class GatewayIntegrationTest {
         registry.add("services.user-service", UPSTREAM::baseUrl);
         registry.add("services.workspace-service", UPSTREAM::baseUrl);
         registry.add("services.booking-service", UPSTREAM::baseUrl);
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("spring.redis.host", REDIS::getHost);
+        registry.add("spring.redis.port", () -> REDIS.getMappedPort(6379));
     }
 
     @BeforeEach
@@ -69,7 +69,7 @@ public abstract class GatewayIntegrationTest {
     }
 
     protected static String bearer(long userId) {
-        return "Bearer " + TOKENS.issue(userId, "user" + userId + "@coworking.test", List.of("USER")).value();
+        return "Bearer " + TOKENS.issue(userId, "user" + userId + "@coworking.test", Collections.singletonList("USER")).getValue();
     }
 
     protected CircuitBreaker.State breakerState(String name) {

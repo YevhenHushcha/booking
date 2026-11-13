@@ -4,10 +4,6 @@ server:
 spring:
   application:
     name: gateway
-  reactor:
-    # WebFlux runs a request on several threads, so the trace id in the logging MDC is lost unless
-    # Reactor copies it across; without this, gateway log lines have an empty [traceId-spanId] field.
-    context-propagation: auto
   cloud:
     # There is no service registry in this project: compose DNS resolves the service names.
     # Turning discovery off also drops its health indicators, which would otherwise report
@@ -15,107 +11,110 @@ spring:
     discovery:
       enabled: false
     gateway:
-      # Gateway 4.3 moved route properties from spring.cloud.gateway.* under server.webflux.*;
-      # the old prefix still binds but logs a deprecation warning.
-      server:
-        webflux:
-          httpclient:
-            # Without these a hung service holds the request until the client gives up,
-            # and the circuit breaker never sees a failure.
-            connect-timeout: 1000
-            response-timeout: 5s
-          # Filters run in the order listed:
-          #   RequestRateLimiter - reject before doing any work, and before a failed call can be retried
-          #   StripPrefix=1      - /api/users/me -> /users/me
-          #   CircuitBreaker     - wraps Retry, so a request and its retries count as one call
-          #   Retry              - idempotent GETs only; see the gateway-get-retry comment below
-          routes:
-            # Login gets its own route for a stricter, per-IP limit against password guessing.
-            - id: auth
-              uri: ${services.user-service}
-              predicates:
-                - Path=/api/auth/**
-              filters:
-                - name: RequestRateLimiter
-                  args:
-                    key-resolver: "#{@userOrIpKeyResolver}"
-                    redis-rate-limiter.replenish-rate: ${rate-limit.login.replenish-rate}
-                    redis-rate-limiter.burst-capacity: ${rate-limit.login.burst-capacity}
-                    redis-rate-limiter.requested-tokens: ${rate-limit.login.requested-tokens}
-                - StripPrefix=1
-                - name: CircuitBreaker
-                  args:
-                    name: user-service
-                    statusCodes: ${circuit-breaker.failure-status-codes}
-            - id: user-service
-              uri: ${services.user-service}
-              predicates:
-                - Path=/api/users/**
-              filters:
-                - name: RequestRateLimiter
-                  args:
-                    key-resolver: "#{@userOrIpKeyResolver}"
-                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
-                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
-                - StripPrefix=1
-                - name: CircuitBreaker
-                  args:
-                    name: user-service
-                    statusCodes: ${circuit-breaker.failure-status-codes}
-                - &gateway-get-retry
-                  name: Retry
-                  args:
-                    retries: 2
-                    # POST is not idempotent: a retry after a lost response would create a second booking.
-                    methods: GET
-                    # 502/503 mean the request did not reach a working instance. 500 is a bug and
-                    # would fail again; 504 means the service is already slow and a retry adds load.
-                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
-                    # The default series (5XX) would retry 500 as well.
-                    series:
-                    # Connection refused or reset. The default also includes timeouts, dropped for the same reason as 504.
-                    exceptions: java.io.IOException
-                    backoff:
-                      first-backoff: 100ms
-                      max-backoff: 200ms
-                      factor: 2
-                      based-on-previous-value: false
-            - id: workspace-service
-              uri: ${services.workspace-service}
-              predicates:
-                - Path=/api/workspaces/**
-              filters:
-                - name: RequestRateLimiter
-                  args:
-                    key-resolver: "#{@userOrIpKeyResolver}"
-                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
-                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
-                - StripPrefix=1
-                - name: CircuitBreaker
-                  args:
-                    name: workspace-service
-                    statusCodes: ${circuit-breaker.failure-status-codes}
-                - *gateway-get-retry
-            - id: booking-service
-              uri: ${services.booking-service}
-              predicates:
-                - Path=/api/bookings/**
-              filters:
-                - name: RequestRateLimiter
-                  args:
-                    key-resolver: "#{@userOrIpKeyResolver}"
-                    redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
-                    redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
-                - StripPrefix=1
-                - name: CircuitBreaker
-                  args:
-                    name: booking-service
-                    statusCodes: ${circuit-breaker.failure-status-codes}
-                - *gateway-get-retry
-  data:
-    redis:
-      host: localhost
-      port: 6379
+      httpclient:
+        # Without these a hung service holds the request until the client gives up,
+        # and the circuit breaker never sees a failure.
+        connect-timeout: 1000
+        response-timeout: 5s
+      # Filters run in the order listed:
+      #   RequestRateLimiter - reject before doing any work, and before a failed call can be retried
+      #   StripPrefix=1      - /api/users/me -> /users/me
+      #   CircuitBreaker     - wraps Retry, so a request and its retries count as one call
+      #   Retry              - idempotent GETs only; see the gateway-get-retry comment below
+      routes:
+        # Login gets its own route for a stricter, per-IP limit against password guessing.
+        - id: auth
+          uri: ${services.user-service}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenish-rate: ${rate-limit.login.replenish-rate}
+                redis-rate-limiter.burst-capacity: ${rate-limit.login.burst-capacity}
+                redis-rate-limiter.requested-tokens: ${rate-limit.login.requested-tokens}
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: user-service
+                statusCodes: ${circuit-breaker.failure-status-codes}
+        - id: user-service
+          uri: ${services.user-service}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: user-service
+                statusCodes: ${circuit-breaker.failure-status-codes}
+            - &gateway-get-retry
+              name: Retry
+              args:
+                retries: 2
+                # POST is not idempotent: a retry after a lost response would create a second booking.
+                methods: GET
+                # 502/503 mean the request did not reach a working instance. 500 is a bug and
+                # would fail again; 504 means the service is already slow and a retry adds load.
+                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                # The default series (5XX) would retry 500 as well.
+                series:
+                # Connection refused or reset. The default also includes timeouts, dropped for the same reason as 504.
+                exceptions: java.io.IOException
+                backoff:
+                  first-backoff: 100ms
+                  max-backoff: 200ms
+                  factor: 2
+                  based-on-previous-value: false
+        - id: workspace-service
+          uri: ${services.workspace-service}
+          predicates:
+            - Path=/api/workspaces/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: workspace-service
+                statusCodes: ${circuit-breaker.failure-status-codes}
+            - *gateway-get-retry
+        - id: booking-service
+          uri: ${services.booking-service}
+          predicates:
+            - Path=/api/bookings/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenish-rate: ${rate-limit.api.replenish-rate}
+                redis-rate-limiter.burst-capacity: ${rate-limit.api.burst-capacity}
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: booking-service
+                statusCodes: ${circuit-breaker.failure-status-codes}
+            - *gateway-get-retry
+  redis:
+    host: localhost
+    port: 6379
+  sleuth:
+    sampler:
+      # Every request is traced so any demo call can be found in Jaeger. Production samples a
+      # fraction here, or keeps 100% and lets a collector tail-sample.
+      probability: 1.0
+  zipkin:
+    # Jaeger accepts the Zipkin v2 format on this port.
+    base-url: http://localhost:9411/
 
 services:
   user-service: http://localhost:8081
@@ -163,14 +162,6 @@ jwt:
   secret: ${JWT_SECRET}
 
 management:
-  tracing:
-    sampling:
-      # Every request is traced so any demo call can be found in Jaeger. Production samples a
-      # fraction here, or keeps 100% and lets an OpenTelemetry Collector tail-sample.
-      probability: 1.0
-  otlp:
-    tracing:
-      endpoint: http://localhost:4318/v1/traces
   metrics:
     tags:
       application: ${spring.application.name}
@@ -181,11 +172,6 @@ management:
         http.server.requests: true
         # Per-route latency as the gateway sees it, including time spent in retries.
         spring.cloud.gateway.requests: true
-  observations:
-    enable:
-      # Security adds four spans ("filterchain before", "authorize exchange", ...) to every
-      # request; the http span already shows the time, so they only bury the downstream call.
-      spring.security: false
   endpoints:
     web:
       exposure:
@@ -204,26 +190,18 @@ management:
     redis:
       enabled: false
 
-logging:
-  level:
-    org.springframework.cloud.gateway: INFO
-
 ---
 # Active inside docker-compose, where each service answers to its compose name.
 spring:
   config:
     activate:
       on-profile: docker
-  data:
-    redis:
-      host: redis
+  redis:
+    host: redis
+  zipkin:
+    base-url: http://jaeger:9411/
 
 services:
   user-service: http://user-service:8081
   workspace-service: http://workspace-service:8082
   booking-service: http://booking-service:8083
-
-management:
-  otlp:
-    tracing:
-      endpoint: http://jaeger:4318/v1/traces
